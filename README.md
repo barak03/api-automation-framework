@@ -1,146 +1,145 @@
 # API Test Automation Framework
 
-A small personal portfolio project demonstrating a maintainable Python API test
-framework against the public
-[Restful Booker](https://restful-booker.herokuapp.com/) service. The deliverable
-is the automation framework, not a backend application.
+A focused Python/pytest test framework for the public
+[Restful Booker](https://restful-booker.herokuapp.com/) API. It is a personal
+Software Automation Engineer portfolio project that demonstrates maintainable API
+test design without hiding HTTP behavior behind a large abstraction layer.
 
-## Cost constraint
+## What the framework demonstrates
 
-The project must remain free to develop and run. It uses local Python tooling,
-open-source packages, and the free public Restful Booker sandbox. Do not add paid
-APIs, SaaS test platforms, cloud resources, or subscriptions.
+- A thin HTTP client with configurable timeouts and a shared session
+- Endpoint-focused API helpers that return the original `requests.Response`
+- Independent test data with unique identifiers and guarded, best-effort cleanup
+- Positive, negative, CRUD, and end-to-end lifecycle coverage
+- Sanitized request/response diagnostics on test failures
+- Selective execution with smoke, regression, and external-test markers
+- Separate CI signals for local framework quality and public-service tests
 
-## Current status
+## Technologies
 
-The Phase 2 core suite is implemented locally:
+- Python 3.11+
+- pytest
+- requests
+- Ruff
+- GitHub Actions
 
-- 13 external API tests covering health, authentication, isolated booking CRUD,
-  negative authorization behavior, filtering, and one full lifecycle.
-- 2 local client tests covering explicit timeouts and sanitized diagnostics.
-- Function-scoped owned-booking data with guarded, best-effort cleanup.
-- Environment-configurable base URL, timeout, and demo credentials.
+## Project structure
 
-Phase 3 CI has not been added. Local stability was established first, as required
-by the project roadmap.
+```text
+api-automation-framework/
+├── .github/workflows/tests.yml  # local-quality and external API CI jobs
+├── api/
+│   ├── client.py                # HTTP transport and sanitized diagnostics
+│   └── booking_api.py           # Restful Booker endpoint helpers
+├── tests/
+│   ├── conftest.py              # configuration, fixtures, cleanup, diagnostics
+│   ├── test_auth.py
+│   ├── test_booking_crud.py
+│   ├── test_booking_lifecycle.py
+│   ├── test_client.py           # local unit tests; no network required
+│   └── test_health.py
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
 
-## Requirements and setup
+## Test coverage
 
-- Python 3.11 or newer
-- Network access to `restful-booker.herokuapp.com`
+The external suite covers service health, valid and invalid authentication,
+booking creation and retrieval, filtering, full and partial updates,
+authorization failures, deletion, unknown IDs, and an owned-booking lifecycle.
+
+Mutation tests create their own booking with a unique lastname and use only the ID
+returned by the service. Cleanup confirms that unique marker before deleting, so a
+public-service reset cannot cause the framework to delete another user's record.
+The local client tests cover URL and timeout defaults, diagnostic-state reset, and
+secret masking without making network requests.
+
+## Setup
+
+Python 3.11 or newer is required.
 
 Using `uv`:
 
 ```bash
 uv sync --extra test
-uv run python -m pytest
 ```
 
-Using the standard library and pip:
+Using `venv` and pip:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[test]'
-python -m pytest
 ```
 
-No real secrets belong in this repository. Restful Booker publishes its demo
-credentials in its documentation; the framework masks them in failure diagnostics.
+## Running tests
 
-## Configuration
+Run lint and the complete suite:
 
-| Environment variable | Default | Purpose |
+```bash
+uv run ruff check .
+uv run python -m pytest
+```
+
+With an activated pip environment, omit the `uv run` prefix.
+
+## Pytest markers
+
+```bash
+uv run python -m pytest -m smoke
+uv run python -m pytest -m regression
+uv run python -m pytest -m "not external"
+uv run python -m pytest -m external
+```
+
+`external` identifies every test that communicates with Restful Booker. The
+`not external` selection runs only deterministic local client tests.
+
+## Failure diagnostics
+
+The session-scoped client retains the latest HTTP response only for the current
+test. An autouse fixture clears that state before every test, preventing a failure
+before its first request from reporting a previous test's exchange.
+
+When a test fails, pytest adds the latest request and response to the report.
+Authorization headers, cookies, passwords, tokens, API keys, and `Set-Cookie`
+values are masked, and body previews are limited to 1,000 characters.
+
+## CI/CD
+
+GitHub Actions runs on pushes and pull requests with Python 3.12. The workflow has
+two clearly named jobs:
+
+- **Local tests and lint** runs Ruff and `pytest -m "not external"`.
+- **Restful Booker external tests** runs `pytest -m external` separately.
+
+This separation makes local framework failures distinguishable from failures
+caused by the public service or network.
+
+## Environment variables
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
 | `API_BASE_URL` | `https://restful-booker.herokuapp.com` | System-under-test URL |
-| `API_REQUEST_TIMEOUT` | `10` | Per-request timeout in seconds; must be positive |
-| `API_USERNAME` | Restful Booker demo username | Override authentication username |
-| `API_PASSWORD` | Restful Booker demo password | Override authentication password |
+| `API_REQUEST_TIMEOUT` | `10` | Positive per-request timeout in seconds |
+| `API_USERNAME` | Restful Booker demo username | Authentication username |
+| `API_PASSWORD` | Restful Booker demo password | Authentication password |
+
+The defaults are the API's published demo credentials, not private secrets. Use
+environment variables for overrides and never commit a local `.env` file.
 
 Example:
 
 ```bash
-API_REQUEST_TIMEOUT=15 uv run python -m pytest
+API_REQUEST_TIMEOUT=15 uv run python -m pytest -m external
 ```
 
-## Architecture
+## Limitations
 
-- `api/client.py` owns URL construction, the shared HTTP session, explicit
-  timeouts, and masked request/response diagnostics.
-- `api/booking_api.py` provides small endpoint-level methods while returning the
-  original `requests.Response` for transparent assertions.
-- `tests/conftest.py` owns environment configuration, authentication, unique test
-  data, owned-record creation/cleanup, and failure-report integration.
-- `tests/test_auth.py` covers valid and invalid authentication.
-- `tests/test_booking_crud.py` covers isolated CRUD, filtering, missing records,
-  and unauthenticated mutations.
-- `tests/test_booking_lifecycle.py` covers create -> retrieve -> update -> delete.
-- `tests/test_client.py` verifies transport defaults and secret masking without
-  making network calls.
-
-This deliberately avoids a base-test hierarchy, automatic retries, and extra
-dependencies. `requests` provides HTTP transport; `pytest` provides fixtures,
-discovery, assertions, and reports.
-
-## Isolation and cleanup
-
-Every mutation test creates a booking with a unique lastname and uses only the ID
-returned by that request. Teardown retrieves the record and checks that unique
-marker before deleting it. This guard prevents a periodic service reset from
-causing cleanup to delete another user's record that reused the same numeric ID.
-
-Cleanup is best-effort. Network errors or already-deleted records do not replace or
-hide the original test result. The framework has no blanket retries.
-
-## Failure diagnostics
-
-When a pytest test fails, the most recent HTTP exchange is attached to its report.
-The diagnostic masks authorization, cookies, passwords, tokens, API keys, and
-`Set-Cookie` values and limits body previews to 1,000 characters.
-
-## Verified API contract
-
-Checked on 2026-09-23 against the deployed API, its published documentation, and
-the upstream `mwinteringham/restful-booker` route implementation.
-
-| Operation | Expected behavior used by the suite |
-| --- | --- |
-| `GET /ping` | `201`, not the more usual `200` |
-| `GET /booking` | `200` with booking-ID objects; supports filters |
-| `GET /booking/{id}` | `200` when present and `404` when absent |
-| `POST /booking` | `200` with `bookingid` and the submitted booking |
-| `POST /auth` | `200` with a token for valid credentials; invalid credentials also return `200` with `Bad credentials` |
-| `PUT/PATCH /booking/{id}` | `200` when authorized; `403` without authorization |
-| `DELETE /booking/{id}` | `201` when authorized; `403` without authorization |
-
-These expectations intentionally follow this API's behavior rather than generic
-REST conventions.
-
-## Latest verification
-
-On 2026-09-23, the complete 15-test suite passed three consecutive runs:
-
-```text
-15 passed in 8.47s
-15 passed in 8.25s
-15 passed in 8.14s
-```
-
-Reproduce with:
-
-```bash
-uv run python -m pytest -q
-```
-
-## Known limitations
-
-- This is a shared public sandbox with periodic resets and intentionally unusual
-  behavior. An outage or reset can fail the external tests even when the framework
-  is correct.
-- Test data and authentication tokens are ephemeral and must not be reused between
-  runs.
-- The current suite is JSON-only and runs sequentially; parallel safety has not
-  been claimed or tested.
-- There is no CI workflow or generated HTML report yet.
-
+Restful Booker is a shared public sandbox that can be unavailable, respond slowly,
+or reset data while tests are running. Those conditions can fail the external
+suite even when the local framework is healthy. Cleanup is deliberately
+best-effort, the suite runs sequentially, and the framework currently targets the
+service's JSON booking API only.

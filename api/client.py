@@ -9,7 +9,6 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 
-
 _SENSITIVE_NAMES = {
     "authorization",
     "cookie",
@@ -96,6 +95,10 @@ class ApiClient:
         )
         self.last_response = response
         return response
+
+    def reset_diagnostics(self) -> None:
+        """Discard request state retained for a previous test."""
+        self.last_response = None
 
     def format_exchange(self, response: requests.Response | None = None) -> str:
         """Format one HTTP exchange while masking credentials and tokens."""

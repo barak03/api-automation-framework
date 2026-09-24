@@ -2,9 +2,12 @@
 
 from unittest.mock import Mock
 
+import pytest
 import requests
 
 from api.client import ApiClient
+
+pytestmark = pytest.mark.regression
 
 
 def test_request_uses_configured_base_url_and_timeout() -> None:
@@ -21,6 +24,16 @@ def test_request_uses_configured_base_url_and_timeout() -> None:
     )
 
 
+def test_reset_diagnostics_discards_previous_response() -> None:
+    client = ApiClient("https://example.test", timeout=1)
+    client.last_response = requests.Response()
+
+    client.reset_diagnostics()
+
+    assert client.last_response is None
+    assert client.format_exchange() == "No HTTP exchange was recorded."
+
+
 def test_diagnostics_mask_credentials_in_4xx_exchange() -> None:
     request = requests.Request(
         "POST",
@@ -30,7 +43,7 @@ def test_diagnostics_mask_credentials_in_4xx_exchange() -> None:
             "Cookie": "token=cookie-secret",
             "Content-Type": "application/json",
         },
-        json={"username": "admin", "password": "body-secret"},
+        json={"username": "diagnostic-user", "password": "body-secret"},
     ).prepare()
     response = requests.Response()
     response.status_code = 403

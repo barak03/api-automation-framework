@@ -5,14 +5,19 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+import pytest
+
 from api.booking_api import BookingApi
 from api.client import ApiClient
+
+pytestmark = [pytest.mark.external, pytest.mark.regression]
 
 
 def _assert_status(response, expected: int, api_client: ApiClient) -> None:
     assert response.status_code == expected, api_client.format_exchange(response)
 
 
+@pytest.mark.smoke
 def test_create_booking_returns_id_and_submitted_data(
     owned_booking: dict[str, Any],
 ) -> None:
@@ -82,6 +87,15 @@ def test_partial_update_changes_only_requested_fields(
     _assert_status(response, 200, api_client)
     expected = {**owned_booking["payload"], **changes}
     assert response.json() == expected
+
+    stored = booking_api.get_booking(owned_booking["id"])
+    _assert_status(stored, 200, api_client)
+    stored_body = stored.json()
+    assert stored_body["firstname"] == changes["firstname"]
+    assert stored_body["depositpaid"] == changes["depositpaid"]
+    unchanged_fields = set(owned_booking["payload"]) - set(changes)
+    for field in unchanged_fields:
+        assert stored_body[field] == owned_booking["payload"][field]
 
 
 def test_update_without_authentication_is_forbidden(

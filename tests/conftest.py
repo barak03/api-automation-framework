@@ -13,12 +13,12 @@ import requests
 from api.booking_api import BookingApi
 from api.client import ApiClient
 
-
 DEFAULT_BASE_URL = "https://restful-booker.herokuapp.com"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "password123"
 BookingFactory = Callable[[dict[str, Any]], tuple[int, requests.Response]]
+ApiCredentials = tuple[str, str]
 
 
 def _request_timeout() -> float:
@@ -56,6 +56,19 @@ def booking_api(api_client: ApiClient) -> BookingApi:
     return BookingApi(api_client)
 
 
+@pytest.fixture(scope="session")
+def api_credentials() -> ApiCredentials:
+    return (
+        os.getenv("API_USERNAME", DEFAULT_USERNAME),
+        os.getenv("API_PASSWORD", DEFAULT_PASSWORD),
+    )
+
+
+@pytest.fixture(autouse=True)
+def reset_api_diagnostics(api_client: ApiClient) -> None:
+    api_client.reset_diagnostics()
+
+
 @pytest.fixture
 def booking_payload() -> dict[str, Any]:
     unique_suffix = uuid4().hex[:12]
@@ -73,11 +86,13 @@ def booking_payload() -> dict[str, Any]:
 
 
 @pytest.fixture
-def auth_token(booking_api: BookingApi, api_client: ApiClient) -> str:
-    response = booking_api.authenticate(
-        username=os.getenv("API_USERNAME", DEFAULT_USERNAME),
-        password=os.getenv("API_PASSWORD", DEFAULT_PASSWORD),
-    )
+def auth_token(
+    booking_api: BookingApi,
+    api_client: ApiClient,
+    api_credentials: ApiCredentials,
+) -> str:
+    username, password = api_credentials
+    response = booking_api.authenticate(username, password)
     _assert_status(response, 200, api_client)
     body = response.json()
     token = body.get("token")

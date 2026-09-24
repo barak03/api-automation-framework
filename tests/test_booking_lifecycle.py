@@ -5,8 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+import pytest
+
 from api.booking_api import BookingApi
 from api.client import ApiClient
+
+pytestmark = [pytest.mark.external, pytest.mark.smoke]
 
 
 def test_owned_booking_lifecycle(

@@ -1,6 +1,10 @@
 """Small availability check for the system under test."""
 
+import pytest
+
 from api.booking_api import BookingApi
+
+pytestmark = [pytest.mark.external, pytest.mark.smoke]
 
 
 def test_ping_confirms_api_is_available(booking_api: BookingApi) -> None:

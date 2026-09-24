@@ -5,9 +5,15 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+reports/
 .env
+.env.*
+!.env.example
 *.log
+.ruff_cache/
+.idea/
+.vscode/
 
 # Keep project instructions local; publish only the public README.
-*.md
-!README.md
+AGENTS.md
+PROJECT.md
